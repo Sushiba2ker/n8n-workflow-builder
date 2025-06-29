@@ -13,9 +13,7 @@ import * as n8nApi from './services/n8nApi';
 import { WorkflowBuilder } from './services/workflowBuilder';
 import { validateWorkflowSpec } from './utils/validation';
 
-console.log("ListToolsRequestSchema:", ListToolsRequestSchema);
-console.log("CallToolRequestSchema:", CallToolRequestSchema);
-
+// MCP Schema validation - only log errors in production
 if (!ListToolsRequestSchema) {
   console.error("ListToolsRequestSchema is undefined!");
 }
@@ -40,7 +38,6 @@ class N8NWorkflowServer {
   private setupResourceHandlers() {
     // List available resources
     this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
-      console.log("listResources handler invoked");
       return {
         resources: [
           {
@@ -61,7 +58,6 @@ class N8NWorkflowServer {
 
     // List resource templates
     this.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => {
-      console.log("listResourceTemplates handler invoked");
       return {
         templates: [
           {
@@ -97,7 +93,6 @@ class N8NWorkflowServer {
     // Read a specific resource
     this.server.setRequestHandler(ReadResourceRequestSchema, async (request: any) => {
       const { uri } = request.params;
-      console.log(`readResource handler invoked for URI: ${uri}`);
       
       // Static resources
       if (uri === '/workflows') {
@@ -220,7 +215,6 @@ class N8NWorkflowServer {
   private setupToolHandlers() {
     // Register available tools using the local schemas and return an array of tool definitions.
     this.server.setRequestHandler(ListToolsRequestSchema, async (req: any) => {
-      console.log("listTools handler invoked with request:", req);
       return {
         tools: [
           // Workflow Tools
@@ -372,8 +366,6 @@ class N8NWorkflowServer {
     });
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
-      console.log("callTool handler invoked with request:", request);
-      
       try {
         const { name, arguments: args } = request.params;
         
