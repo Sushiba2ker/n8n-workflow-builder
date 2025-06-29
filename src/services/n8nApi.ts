@@ -191,3 +191,87 @@ export async function deleteExecution(id: number): Promise<N8NExecutionResponse>
     return handleApiError(`deleting execution with ID ${id}`, error);
   }
 }
+
+/**
+ * Execute a workflow manually by ID
+ * 
+ * WARNING: This uses an internal n8n endpoint that is not officially documented.
+ * The endpoint may change without notice. For production use, consider using
+ * webhook triggers instead.
+ * 
+ * @param id The workflow ID to execute
+ * @param inputData Optional input data for manual trigger workflows
+ * @returns The execution result
+ */
+export async function executeWorkflow(id: string, inputData?: any): Promise<any> {
+  try {
+    console.log(`Executing workflow with ID: ${id}`);
+    console.warn('WARNING: Using undocumented internal API endpoint for workflow execution');
+    
+    // First, get the workflow definition
+    const workflow = await getWorkflow(id);
+    
+    // Prepare the execution payload
+    const executionData = {
+      workflowData: {
+        id: workflow.id,
+        name: workflow.name,
+        nodes: workflow.nodes,
+        connections: workflow.connections,
+        active: workflow.active,
+        createdAt: workflow.createdAt,
+        updatedAt: workflow.updatedAt
+      },
+      runData: inputData ? { [workflow.nodes[0].name]: [{ json: inputData }] } : undefined
+    };
+    
+    // Use the internal execution endpoint
+    const response = await api.post('/workflows/run', executionData);
+    console.log('Response:', response.status, response.statusText);
+    return response.data;
+  } catch (error) {
+    return handleApiError(`executing workflow with ID ${id}`, error);
+  }
+}
+
+/**
+ * Retry a failed execution
+ * 
+ * @param id The execution ID to retry
+ * @returns The new execution result
+ */
+export async function retryExecution(id: number): Promise<any> {
+  try {
+    console.log(`Retrying execution with ID: ${id}`);
+    
+    // First, get the failed execution details
+    const execution = await getExecution(id, true);
+    
+    if (!execution.workflowId) {
+      throw new Error('Cannot retry execution: missing workflow ID');
+    }
+    
+    // Get the workflow definition
+    const workflow = await getWorkflow(execution.workflowId.toString());
+    
+    // Re-execute the workflow with the same data
+    const retryData = {
+      workflowData: {
+        id: workflow.id,
+        name: workflow.name,
+        nodes: workflow.nodes,
+        connections: workflow.connections,
+        active: workflow.active,
+        createdAt: workflow.createdAt,
+        updatedAt: workflow.updatedAt
+      },
+      runData: execution.data ? execution.data : undefined
+    };
+    
+    const response = await api.post('/workflows/run', retryData);
+    console.log('Response:', response.status, response.statusText);
+    return response.data;
+  } catch (error) {
+    return handleApiError(`retrying execution with ID ${id}`, error);
+  }
+}

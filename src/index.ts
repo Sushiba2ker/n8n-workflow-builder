@@ -221,8 +221,69 @@ class N8NWorkflowServer {
           {
             name: 'list_workflows',
             enabled: true,
-            description: 'List all workflows from n8n',
-            inputSchema: { type: 'object', properties: {} }
+            description: 'List workflows from n8n with optional search, filter and pagination',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                search: { 
+                  type: 'string', 
+                  description: 'Search workflows by name (case-insensitive)'
+                },
+                active: { 
+                  type: 'boolean', 
+                  description: 'Filter by active status (true=active only, false=inactive only, undefined=all)'
+                },
+                tags: { 
+                  type: 'array', 
+                  items: { type: 'string' }, 
+                  description: 'Filter by workflow tags'
+                },
+                limit: { 
+                  type: 'number', 
+                  default: 50,
+                  description: 'Maximum number of workflows to return'
+                },
+                offset: { 
+                  type: 'number', 
+                  default: 0,
+                  description: 'Number of workflows to skip for pagination'
+                }
+              }
+            }
+          },
+          {
+            name: 'execute_workflow',
+            enabled: true,
+            description: 'Execute a workflow manually by ID',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                id: { 
+                  type: 'string',
+                  description: 'The ID of the workflow to execute'
+                },
+                inputData: {
+                  type: 'object',
+                  description: 'Optional input data to pass to the workflow (for manual trigger workflows)'
+                }
+              },
+              required: ['id']
+            }
+          },
+          {
+            name: 'retry_execution',
+            enabled: true,
+            description: 'Retry a failed execution',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                id: { 
+                  type: 'number',
+                  description: 'The ID of the execution to retry'
+                }
+              },
+              required: ['id']
+            }
           },
           {
             name: 'create_workflow',
@@ -372,11 +433,77 @@ class N8NWorkflowServer {
         switch (name) {
           // Workflow Tools
           case 'list_workflows':
-            const workflows = await n8nApi.listWorkflows();
+            let workflows = await n8nApi.listWorkflows();
+            
+            // Apply search filter
+            if (args.search) {
+              const searchTerm = args.search.toLowerCase();
+              workflows = workflows.filter((wf: any) => 
+                wf.name.toLowerCase().includes(searchTerm)
+              );
+            }
+            
+            // Apply active status filter
+            if (args.active !== undefined) {
+              workflows = workflows.filter((wf: any) => wf.active === args.active);
+            }
+            
+            // Apply tags filter
+            if (args.tags && args.tags.length > 0) {
+              workflows = workflows.filter((wf: any) => {
+                if (!wf.tags || !Array.isArray(wf.tags)) return false;
+                return args.tags.some((tag: string) => 
+                  wf.tags.some((wfTag: any) => 
+                    (typeof wfTag === 'string' ? wfTag : wfTag.name) === tag
+                  )
+                );
+              });
+            }
+            
+            // Apply pagination
+            const offset = args.offset || 0;
+            const limit = args.limit || 50;
+            const total = workflows.length;
+            const paginatedWorkflows = workflows.slice(offset, offset + limit);
+            
+            const result = {
+              data: paginatedWorkflows,
+              count: paginatedWorkflows.length,
+              total: total,
+              offset: offset,
+              limit: limit
+            };
+            
             return {
               content: [{ 
                 type: 'text', 
-                text: JSON.stringify(workflows, null, 2) 
+                text: JSON.stringify(result, null, 2) 
+              }]
+            };
+            
+          case 'execute_workflow':
+            if (!args.id) {
+              throw new McpError(ErrorCode.InvalidParams, 'Workflow ID is required');
+            }
+            
+            const workflowExecution = await n8nApi.executeWorkflow(args.id, args.inputData);
+            return {
+              content: [{ 
+                type: 'text', 
+                text: JSON.stringify(workflowExecution, null, 2) 
+              }]
+            };
+            
+          case 'retry_execution':
+            if (!args.id) {
+              throw new McpError(ErrorCode.InvalidParams, 'Execution ID is required');
+            }
+            
+            const retryExecution = await n8nApi.retryExecution(args.id);
+            return {
+              content: [{ 
+                type: 'text', 
+                text: JSON.stringify(retryExecution, null, 2) 
               }]
             };
             
